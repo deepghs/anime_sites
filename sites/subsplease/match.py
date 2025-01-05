@@ -246,7 +246,7 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
                             'MAL Cover': mal_cover,
                             'MAL Title': mal_title,
                             'Year': int(item['year']) if item['year'] else 'N/A',
-                            'Reason': item['reason'],
+                            # 'Reason': item['reason'],
                         })
 
                     df_lst_success = pd.DataFrame(lst_success)
