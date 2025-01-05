@@ -302,5 +302,5 @@ if __name__ == '__main__':
     logging.try_init_root(logging.INFO)
     sync(
         repository='deepghs/subsplease_mal',
-        deploy_span=0 * 60.0,
+        deploy_span=1 * 60.0,
     )
