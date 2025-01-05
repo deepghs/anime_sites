@@ -19,7 +19,6 @@ from pyanimeinfo.myanimelist import JikanV4Client
 from pyrate_limiter import Rate, Limiter, Duration
 
 from .info import get_info_from_subsplease
-from .lst import list_all_items_from_subsplease
 from .match import _get_image_url
 from ..utils import get_requests_session, parallel_call, download_file
 
@@ -305,7 +304,7 @@ def sync(repository: str, change_items: List[Tuple[str, int]],
             _last_update = time.time()
             _total_count = len(df_animes)
 
-        for sitem_url, mal_id in list_all_items_from_subsplease(session=session):
+        for sitem_url, mal_id in change_items:
             assert urlsplit(sitem_url).path_segments[1] == 'shows'
             page_id = urlsplit(sitem_url).path_segments[2]
 
