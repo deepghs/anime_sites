@@ -13,3 +13,4 @@ pynacl
 pyrate-limiter
 pyarrow
 tabulate
+dateparser
