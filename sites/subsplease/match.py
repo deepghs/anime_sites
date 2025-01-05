@@ -131,7 +131,7 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
 
             def _fn_download_mal_cover(item):
                 _, ext = os.path.splitext(urlsplit(item['mal_cover_image_url']).filename)
-                dst_filename = os.path.join(mal_covers_dir, f'{item["mal_id"]}{ext}')
+                dst_filename = os.path.join(mal_covers_dir, f'{int(item["mal_id"])}{ext}')
 
                 try:
                     if not os.path.exists(dst_filename):
