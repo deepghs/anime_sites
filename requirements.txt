@@ -12,3 +12,4 @@ openai
 pynacl
 pyrate-limiter
 pyarrow
+tabulate

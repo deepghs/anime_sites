@@ -57,6 +57,7 @@ def get_info_from_subsplease(page_url: str, session: Optional[requests.Session] 
 
     return {
         'page_id': page_id,
+        'url': resp.url,
         'title': title,
         'prompt': prompt,
         'cover_image_url': cover_image_url,

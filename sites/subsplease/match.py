@@ -3,18 +3,20 @@ import os
 import re
 import time
 
+import numpy as np
 import pandas as pd
 from ditk import logging
 from hbutils.string import plural_word
 from hbutils.system import urlsplit, TemporaryDirectory
 from hfutils.cache import delete_detached_cache
 from hfutils.operate import get_hf_client, get_hf_fs, upload_directory_as_directory
-from hfutils.utils import number_to_tag
+from hfutils.utils import number_to_tag, hf_normpath
+from huggingface_hub import hf_hub_url
 from pyrate_limiter import Rate, Limiter, Duration
 
 from .llm import get_full_info_for_subsplease
 from .lst import list_all_items_from_subsplease
-from ..utils import get_requests_session
+from ..utils import get_requests_session, parallel_call, download_file
 
 
 def _get_url_from_small_dict(dict_: dict):
@@ -97,6 +99,57 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
             df_animes = df_animes.sort_values(by=['page_id'], ascending=[False])
             df_animes.to_parquet(table_parquet_file, engine='pyarrow', index=False)
 
+            d_subs_images = {}
+
+            def _fn_download_subs_cover(item):
+                _, ext = os.path.splitext(urlsplit(item['subsplease_cover_image_url']).filename)
+                dst_filename = os.path.join(subs_covers_dir, f'{item["page_id"]}{ext}')
+
+                try:
+                    if not os.path.exists(dst_filename):
+                        download_file(
+                            item['subsplease_cover_image_url'],
+                            filename=dst_filename,
+                            session=session,
+                        )
+                except:
+                    if os.path.exists(dst_filename):
+                        os.remove(dst_filename)
+                    raise
+                else:
+                    d_subs_images[item['page_id']] = hf_normpath(os.path.relpath(dst_filename, upload_dir))
+
+            parallel_call(
+                df_animes[~df_animes['subsplease_cover_image_url'].isnull()].to_dict('records'),
+                _fn_download_subs_cover,
+                desc='Downloading Subsplease Cover Images'
+            )
+
+            d_mal_images = {}
+
+            def _fn_download_mal_cover(item):
+                _, ext = os.path.splitext(urlsplit(item['mal_cover_image_url']).filename)
+                dst_filename = os.path.join(mal_covers_dir, f'{item["mal_id"]}{ext}')
+
+                try:
+                    if not os.path.exists(dst_filename):
+                        download_file(
+                            item['mal_cover_image_url'],
+                            filename=dst_filename,
+                            session=session,
+                        )
+                except:
+                    if os.path.exists(dst_filename):
+                        os.remove(dst_filename)
+                    raise
+                else:
+                    d_mal_images[item['mal_id']] = hf_normpath(os.path.relpath(dst_filename, upload_dir))
+
+            parallel_call(
+                df_animes[~df_animes['mal_cover_image_url'].isnull()].to_dict('records'),
+                _fn_download_mal_cover,
+                desc='Downloading MAL Cover Images'
+            )
 
             with open(os.path.join(upload_dir, 'README.md'), 'w') as f:
                 print('---', file=f)
@@ -117,25 +170,97 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
                 print('---', file=f)
                 print('', file=f)
 
-                # print('## Records', file=f)
-                # print(f'', file=f)
-                # df_records_shown = df_animes[:50][
-                #     ['id', 'image_width', 'image_height', 'rating', 'mimetype', 'file_size', 'file_url']]
-                # print(f'{plural_word(len(d_records), "record")} in total. '
-                #       f'Only {plural_word(len(df_records_shown), "record")} shown.', file=f)
-                # print(f'', file=f)
-                # print(df_records_shown.to_markdown(index=False), file=f)
-                # print(f'', file=f)
+                print(f'This is the matching result of subsplease and myanimelist, '
+                      f'based on the LLM model.', file=f)
+                print(f'', file=f)
+
+                df_success = df_animes[~df_animes['mal_id'].isnull()].replace(np.nan, None)
+                if len(df_success):
+                    print('## Resource', file=f)
+                    print(f'', file=f)
+
+                    lst_success = []
+                    for item in df_success.to_dict('records'):
+                        if d_subs_images.get(item['page_id']):
+                            subs_image_url = hf_hub_url(
+                                repo_id=repository,
+                                repo_type='dataset',
+                                filename=d_subs_images[item['page_id']],
+                            )
+                        else:
+                            subs_image_url = None
+                        if d_mal_images.get(item['mal_id']):
+                            mal_image_url = hf_hub_url(
+                                repo_id=repository,
+                                repo_type='dataset',
+                                filename=d_mal_images[item['mal_id']],
+                            )
+                        else:
+                            mal_image_url = None
+
+                        subs_cover = f'![{item["page_id"]}]({subs_image_url})' if subs_image_url else 'N/A'
+                        subs_title = item['subsplease_title']
+                        if item['subsplease_url']:
+                            subs_cover = f'[{subs_cover}]({item["subsplease_url"]})'
+                            subs_title = f'[{subs_title}]({item["subsplease_url"]})'
+                        mal_cover = f'![{item["mal_id"]}]({mal_image_url})' if mal_image_url else 'N/A'
+                        mal_title = item['mal_title'] if item['mal_title'] else 'N/A'
+                        if item.get('mal_url'):
+                            mal_cover = f'[{mal_cover}]({item["mal_url"]})'
+                            mal_title = f'[{mal_title}]({item["mal_url"]})'
+                        lst_success.append({
+                            'Subs Cover': subs_cover,
+                            'Subs Title': subs_title,
+                            'MAL Cover': mal_cover,
+                            'MAL Title': mal_title,
+                            'Year': int(item['year']) if item['year'] else 'N/A',
+                            'Reason': item['reason'],
+                        })
+
+                    df_lst_success = pd.DataFrame(lst_success)
+                    print(df_lst_success.to_markdown(index=False), file=f)
+                    print(f'', file=f)
+
+                df_failed = df_animes[df_animes['mal_id'].isnull()].replace(np.nan, None)
+                if len(df_failed):
+                    print('## Resources (Failed to Match)', file=f)
+                    print(f'', file=f)
+
+                    lst_failed = []
+                    for item in df_failed.to_dict('records'):
+                        if d_subs_images.get(item['page_id']):
+                            subs_image_url = hf_hub_url(
+                                repo_id=repository,
+                                repo_type='dataset',
+                                filename=d_subs_images[item['page_id']],
+                            )
+                        else:
+                            subs_image_url = None
+
+                        subs_cover = f'![{item["page_id"]}]({subs_image_url})' if subs_image_url else 'N/A'
+                        subs_title = item['subsplease_title']
+                        if item['subsplease_url']:
+                            subs_cover = f'[{subs_cover}]({item["subsplease_url"]})'
+                            subs_title = f'[{subs_title}]({item["subsplease_url"]})'
+                        lst_failed.append({
+                            'Subs Cover': subs_cover,
+                            'Subs Title': subs_title,
+                            'Year': int(item['year']) if item['year'] else 'N/A',
+                            'Reason': item['reason'],
+                        })
+
+                    df_lst_failed = pd.DataFrame(lst_failed)
+                    print(df_lst_failed.to_markdown(index=False), file=f)
+                    print(f'', file=f)
 
             limiter.try_acquire('hf upload limit')
-            # upload_directory_as_directory(
-            #     repo_id=repository,
-            #     repo_type='dataset',
-            #     local_directory=upload_dir,
-            #     path_in_repo='.',
-            #     hf_token=os.environ['HF_TOKEN'],
-            #     message=f'Adding {plural_word(len(df_animes) - _total_count, "new record")} into index',
-            # )
+            upload_directory_as_directory(
+                repo_id=repository,
+                repo_type='dataset',
+                local_directory=upload_dir,
+                path_in_repo='.',
+                message=f'Adding {plural_word(len(df_animes) - _total_count, "new record")} into index',
+            )
             has_update = False
             _last_update = time.time()
             _total_count = len(df_animes)
