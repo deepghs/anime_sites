@@ -1,0 +1,14 @@
+hfutils
+hbutils
+huggingface_hub
+numpy
+pandas
+tqdm
+di-toolkit
+pyanimeinfo
+pyquery
+requests
+openai
+pynacl
+pyrate-limiter
+pyarrow
