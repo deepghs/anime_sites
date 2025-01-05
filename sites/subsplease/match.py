@@ -10,7 +10,7 @@ from ditk import logging
 from hbutils.string import plural_word
 from hbutils.system import urlsplit, TemporaryDirectory
 from hfutils.cache import delete_detached_cache
-from hfutils.operate import get_hf_client, get_hf_fs, upload_directory_as_directory
+from hfutils.operate import get_hf_client, get_hf_fs, upload_directory_as_directory, download_directory_as_directory
 from hfutils.utils import number_to_tag, hf_normpath
 from huggingface_hub import hf_hub_url
 from pyrate_limiter import Rate, Limiter, Duration
@@ -90,6 +90,23 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
         os.makedirs(mal_covers_dir, exist_ok=True)
         subs_covers_dir = os.path.join(upload_dir, 'assets', 'subs')
         os.makedirs(subs_covers_dir, exist_ok=True)
+
+        if sync_mode:
+            logging.info('Downloading current mal images ...')
+            download_directory_as_directory(
+                repo_id=repository,
+                repo_type='dataset',
+                dir_in_repo=hf_normpath(os.path.relpath(mal_covers_dir, upload_dir)),
+                local_directory=mal_covers_dir,
+            )
+
+            logging.info('Downloading current subsplease images ...')
+            download_directory_as_directory(
+                repo_id=repository,
+                repo_type='dataset',
+                dir_in_repo=hf_normpath(os.path.relpath(subs_covers_dir, upload_dir)),
+                local_directory=subs_covers_dir,
+            )
 
         _last_update, has_update = None, False
         _total_count = len(d_animes)
