@@ -247,6 +247,6 @@ def get_full_info_for_subsplease(url, model_name: str = _DEFAULT_MODEL, val_time
             'title': None,
             'reason': reason,
             'mal': None,
-            'year': list(d_mal_vals.values())[0],
+            'year': list(d_mal_vals.values())[0]['year'],
             'subsplease': subsplease_info,
         }
