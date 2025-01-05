@@ -181,7 +181,6 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
                 if len(df_success):
                     print('## Resource', file=f)
                     print(f'', file=f)
-
                     print(f'{plural_word(len(df_success), "matched anime")} in total.', file=f)
                     print(f'', file=f)
 
@@ -231,6 +230,8 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
                 df_failed = df_animes[df_animes['mal_id'].isnull()].replace(np.nan, None)
                 if len(df_failed):
                     print('## Resources (Failed to Match)', file=f)
+                    print(f'', file=f)
+                    print(f'{plural_word(len(df_failed), "unmatched anime")} in total.', file=f)
                     print(f'', file=f)
 
                     lst_failed = []
