@@ -177,6 +177,7 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
                 print(f'', file=f)
 
                 df_success = df_animes[~df_animes['mal_id'].isnull()].replace(np.nan, None)
+                df_success = df_success.sort_values(by=['year', 'mal_id'], ascending=[False, False])
                 if len(df_success):
                     print('## Resource', file=f)
                     print(f'', file=f)
