@@ -45,7 +45,7 @@ def _name_safe(name_text):
 
 
 def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5 * 60.0,
-         proxy_pool: Optional[str] = None):
+         proxy_pool: Optional[str] = None, sync_mode: bool = True):
     delete_detached_cache()
     hf_client = get_hf_client()
     hf_fs = get_hf_fs()
@@ -72,7 +72,7 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
             repo_id=repository,
             repo_type='dataset',
             filename='table.parquet',
-        ))
+        )).replace(np.nan, None)
         d_animes = {item['page_id']: item for item in df.to_dict('records')}
     else:
         d_animes = {}
@@ -289,6 +289,9 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
             if page_id in d_animes and d_animes[page_id]['mal_id']:
                 logging.warning(f'Anime {sitem!r} already matched, skipped.')
                 continue
+            elif not sync_mode and page_id in d_animes:
+                logging.warning(f'Anime {sitem!r} already asked, but not matched, skipped due to non-sync mode.')
+                continue
 
             full_info = get_full_info_for_subsplease(sitem['url'], session=session)
             row = {
@@ -311,6 +314,7 @@ if __name__ == '__main__':
     logging.try_init_root(logging.INFO)
     sync(
         repository='deepghs/subsplease_mal',
-        deploy_span=1 * 60.0,
+        deploy_span=5 * 60.0,
         proxy_pool=os.environ['PP_SITE'],
+        sync_mode=False,
     )
