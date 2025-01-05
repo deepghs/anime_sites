@@ -2,6 +2,7 @@ import math
 import os
 import re
 import time
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -43,7 +44,8 @@ def _name_safe(name_text):
     return re.sub(r'[\W_]+', ' ', name_text).strip(' ')
 
 
-def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5 * 60.0):
+def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5 * 60.0,
+         proxy_pool: Optional[str] = None):
     delete_detached_cache()
     hf_client = get_hf_client()
     hf_fs = get_hf_fs()
@@ -76,6 +78,13 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
         d_animes = {}
 
     session = get_requests_session()
+    if proxy_pool:
+        logging.info(f'Proxy pool {proxy_pool!r} enabled.')
+        session.proxies.update({
+            'http': proxy_pool,
+            'https': proxy_pool
+        })
+
     with TemporaryDirectory() as upload_dir:
         mal_covers_dir = os.path.join(upload_dir, 'assets', 'mal')
         os.makedirs(mal_covers_dir, exist_ok=True)
@@ -303,4 +312,5 @@ if __name__ == '__main__':
     sync(
         repository='deepghs/subsplease_mal',
         deploy_span=1 * 60.0,
+        proxy_pool=os.environ['PP_SITE'],
     )
