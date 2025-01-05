@@ -95,8 +95,10 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
 
             table_parquet_file = os.path.join(upload_dir, 'table.parquet')
             os.makedirs(os.path.dirname(table_parquet_file), exist_ok=True)
-            df_animes = pd.DataFrame(list(d_animes.values()))
-            df_animes = df_animes.sort_values(by=['page_id'], ascending=[False])
+            df_animes = pd.DataFrame(list(d_animes.values())).replace(np.nan, None)
+            df_animes['y'] = df_animes['year'].map(lambda x: x or 0)
+            df_animes = df_animes.sort_values(by=['year', 'page_id'], ascending=[False, True])
+            del df_animes['y']
             df_animes.to_parquet(table_parquet_file, engine='pyarrow', index=False)
 
             d_subs_images = {}
@@ -179,6 +181,9 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
                     print('## Resource', file=f)
                     print(f'', file=f)
 
+                    print(f'{plural_word(len(df_success), "matched anime")} in total.', file=f)
+                    print(f'', file=f)
+
                     lst_success = []
                     for item in df_success.to_dict('records'):
                         if d_subs_images.get(item['page_id']):
@@ -211,6 +216,7 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
                         lst_success.append({
                             'Subs Cover': subs_cover,
                             'Subs Title': subs_title,
+                            'MAL ID': item['mal_id'],
                             'MAL Cover': mal_cover,
                             'MAL Title': mal_title,
                             'Year': int(item['year']) if item['year'] else 'N/A',
@@ -285,11 +291,9 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
             }
             d_animes[page_id] = row
             has_update = True
+            _deploy()
 
-            if len(d_animes) >= 2:
-                break
-
-        _deploy()
+        _deploy(force=True)
 
 
 if __name__ == '__main__':
