@@ -163,17 +163,17 @@ def _ask_chatgpt(title: str, synopsis: Optional[str] = None, search_result: Opti
     tries = 0
     while tries < max_tries:
         logging.info(f'Asking LLM model {model_name!r} about {title!r} ...')
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=[
-                {'role': 'system', 'content': _SYSTEM_TEXT},
-                {"role": "user", "content": message},
-            ],
-        )
-        resp_text = response.choices[0].message.content.strip()
-        logging.info(f'Response from LLM:\n{resp_text}')
-
         try:
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {'role': 'system', 'content': _SYSTEM_TEXT},
+                    {"role": "user", "content": message},
+                ],
+            )
+            resp_text = response.choices[0].message.content.strip()
+            logging.info(f'Response from LLM:\n{resp_text}')
+
             pinfo = _parse_output(resp_text)
             if pinfo['mal_id'] and pinfo['mal_id'] in d_items:
                 return {

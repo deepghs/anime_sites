@@ -310,7 +310,11 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
                 logging.warning(f'Anime {sitem!r} already asked, but not matched, skipped due to non-sync mode.')
                 continue
 
-            full_info = get_full_info_for_subsplease(sitem['url'], session=session)
+            try:
+                full_info = get_full_info_for_subsplease(sitem['url'], session=session)
+            except:
+                logging.exception(f'Error on {sitem!r}')
+                continue
             row = {
                 'page_id': page_id,
                 'mal_id': full_info['mal_id'],
