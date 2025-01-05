@@ -240,7 +240,7 @@ def get_full_info_for_subsplease(url, model_name: str = _DEFAULT_MODEL, val_time
         }
     else:
         reason = f'Cannot determine which anime it is due to the complex result ' \
-                 f'in {plural_word(val_times, "time")}: {mal_ids!r}'
+                 f'in {plural_word(val_times, "time")}: {dict(mal_ids)!r}'
         logging.warning(f'Match failed.\nReason: {reason}')
         return {
             'mal_id': None,
