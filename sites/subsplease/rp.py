@@ -337,5 +337,17 @@ if __name__ == '__main__':
         change_items=[
             ('https://subsplease.org/shows/cardfight-vanguard-willdress/', 49819),
             ('https://subsplease.org/shows/gunma-chan/', 49184),
+
+            ('https://subsplease.org/shows/haikyuu-movie-gomisuteba-no-kessen/', 52742),
+            ('https://subsplease.org/shows/sengoku-youko/', 56242),
+            ('https://subsplease.org/shows/shy/', 53237),
+            ('https://subsplease.org/shows/mahoutsukai-no-yome-s2/', 52955),
+            ('https://subsplease.org/shows/gunma-chan/', 49184),
+            ('https://subsplease.org/shows/cardfight-vanguard-willdress/', 49819),
+            ('https://subsplease.org/shows/kyoukai-senki/', 48466),
+            ('https://subsplease.org/shows/shingeki-no-kyojin/', 40028),
+            ('https://subsplease.org/shows/idolish7-s3/', 45577),
+            ('https://subsplease.org/shows/mushoku-tensei/', 39535),
+            ('https://subsplease.org/shows/girls-und-panzer-das-finale/', 33970),
         ]
     )
