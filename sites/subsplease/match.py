@@ -336,6 +336,6 @@ if __name__ == '__main__':
     sync(
         repository='deepghs/subsplease_mal',
         deploy_span=5 * 60.0,
-        proxy_pool=os.environ['PP_SITE'],
-        sync_mode=False,
+        # proxy_pool=os.environ['PP_SITE'],
+        sync_mode=True,
     )
