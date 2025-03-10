@@ -14,3 +14,4 @@ pyrate-limiter
 pyarrow
 tabulate
 dateparser
+xmltodict
