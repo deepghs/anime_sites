@@ -61,6 +61,7 @@ def get_anime_info(anime_page_url: str, session: Optional[requests.Session] = No
         })
 
     external_links = {}
+    other_links = {}
     rss_url = None
     for btn_group in content('.entry-content-buttons').items():
         if 'more info:' in btn_group.text().lower():
@@ -70,6 +71,9 @@ def get_anime_info(anime_page_url: str, session: Optional[requests.Session] = No
             for pitem in btn_group('p').items():
                 if 'rss link' in pitem.text().lower() and 'ALL' in pitem.text():
                     rss_url = urljoin(resp.url, pitem('a').attr('href'))
+        elif 'other:' in btn_group.text().lower():
+            for btn_item in btn_group('a.entry-sub-content-buttons').items():
+                other_links[btn_item.text().strip()] = urljoin(resp.url, btn_item.attr('href'))
 
     if 'MAL' in external_links:
         segments = urlsplit(external_links['MAL']).path_segments
@@ -104,6 +108,7 @@ def get_anime_info(anime_page_url: str, session: Optional[requests.Session] = No
         'poster_url': poster_url,
         'story': story,
         'external_links': external_links,
+        'other_links': other_links,
         'related': related,
         'rss_url': rss_url,
         'rss_items_res': rss_items_res,
