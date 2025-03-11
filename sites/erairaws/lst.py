@@ -1,7 +1,6 @@
 import datetime
 import os.path
 from typing import Optional
-from urllib.parse import quote_plus
 
 import pandas as pd
 from ditk import logging
