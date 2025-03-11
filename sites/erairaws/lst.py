@@ -1,6 +1,7 @@
 import datetime
 import os.path
 from typing import Optional
+from urllib.parse import quote_plus
 
 import pandas as pd
 from ditk import logging
@@ -185,7 +186,7 @@ def sync(repository: str, proxy_pool: Optional[str] = None):
                         name: (
                             f'[{name}]({iitem["resource_urls"][name].replace(" ", "+")})'
                             if isinstance(iitem["resource_urls"][name], str) else
-                            f'[{name}]({iitem["resource_urls"][name]["torrent"]})'
+                            f'[{name}]({iitem["resource_urls"][name]["torrent"].replace(" ", "+")})'
                         ) if iitem["resource_urls"].get(name) else ''
                         for name in res_names
                     },
