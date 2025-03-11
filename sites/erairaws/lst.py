@@ -139,7 +139,7 @@ def sync(repository: str, proxy_pool: Optional[str] = None):
                     'Resolution': aitem["rss_items_res"],
                     'RSS': f'[RSS]({aitem["rss_url"]})' if aitem['rss_url'] else '',
                     **{
-                        extname: f'f[{extname}]({aitem["external_links"][extname]})' if aitem["external_links"].get(
+                        extname: f'[{extname}]({aitem["external_links"][extname]})' if aitem["external_links"].get(
                             extname) else ''
                         for extname in ext_names
                     },
