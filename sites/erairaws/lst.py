@@ -122,6 +122,10 @@ def sync(repository: str, proxy_pool: Optional[str] = None):
             print(f'', file=f)
 
             animes_shown = []
+            ext_names = []
+            for aitem in df_animes.to_dict('records'):
+                ext_names.extend(aitem['external_links'])
+            ext_names = sorted(set(ext_names))
             for aitem in df_animes.to_dict('records'):
                 poster_shown_url = hf_hub_url(
                     repo_id=repository,
@@ -133,6 +137,12 @@ def sync(repository: str, proxy_pool: Optional[str] = None):
                     'Post': f'[![{aitem["id"]}]({poster_shown_url})]({aitem["external_links"]["MAL"]})',
                     'Bangumi': f'[{aitem["title"]}]({aitem["page_url"]})',
                     'Resolution': aitem["rss_items_res"],
+                    'RSS': f'[RSS]({aitem["rss_url"]})' if aitem['rss_url'] else '',
+                    **{
+                        extname: f'f[{extname}]({aitem["external_links"][extname]})' if aitem["external_links"].get(
+                            extname) else ''
+                        for extname in ext_names
+                    },
                     'Magnets': len(aitem["rss_items"]),
                     'Last Published At': datetime.datetime.fromtimestamp(aitem['last_published_at']).isoformat(),
                 })
