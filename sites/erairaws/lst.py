@@ -57,6 +57,7 @@ def sync(repository: str, proxy_pool: Optional[str] = None):
 
     def _fn_x(ax):
         title, page_url = ax
+        logging.info(f'Processing {title!r}, page: {page_url!r} ...')
         info = get_anime_info(page_url, session=session, session_rss=session_rss)
         if not info['mal_id']:
             logging.warning(f'No MAL ID found for {page_url!r}, skipped.')

@@ -94,32 +94,47 @@ def get_anime_info(anime_page_url: str, session: Optional[requests.Session] = No
     resources = []
     if r_pane:
         for table in r_pane('table.table').items():
+            fst_row = table('tr:nth-child(1)')
             categories = [
                 c.attr('data-title')
-                for c in table('tr:nth-child(1) th a[data-title]').items()
+                for c in fst_row('th a[data-title]').items()
             ]
 
-            ititle = table('tr:nth-child(1) th a.aa_ss_ops_new').text().strip()
-            iurl = urljoin(resp.url, table('tr:nth-child(1) th a.aa_ss_ops_new').attr('href'))
+            ititle = fst_row('th a.aa_ss_ops_new').text().strip()
+            iurl = urljoin(resp.url, fst_row('th a.aa_ss_ops_new').attr('href'))
 
-            sec_links = {
-                x.text().strip(): urljoin(resp.url, x('a').attr('href')) if 'magnet' not in x.text().strip().lower() else x(
-                    'a').attr('href')
-                for x in table('tr:nth-child(2) th a.sub_ddl_box').items()
-            }
-            langs = [
-                x.attr('data-title')
-                for x in table('tr:nth-child(2) th span.tooltip3[data-title]').items()
-            ]
-            publish_at_str = table('tr:nth-child(3) th font.clock_font').text()
+            if table('tr:nth-child(3) th font.clock_font').text().strip():
+                sec_row = table('tr:nth-child(2)')
+                thr_row = table('tr:nth-child(3)')
+            else:
+                sec_row = None
+                thr_row = table('tr:nth-child(2)')
+
+            if sec_row:
+                sec_links = {
+                    x.text().strip(): urljoin(resp.url,
+                                              x('a').attr('href')) if 'magnet' not in x.text().strip().lower() else x(
+                        'a').attr('href')
+                    for x in sec_row('th a.sub_ddl_box').items()
+                }
+                langs = [
+                    x.attr('data-title')
+                    for x in sec_row('th span.tooltip3[data-title]').items()
+                ]
+            else:
+                sec_links = {}
+                langs = []
+
+            publish_at_str = thr_row('th font.clock_font').text()
             published_at = dateparser.parse(publish_at_str).timestamp()
 
             rurls = {}
             rx_maps = {}
-            for sitem in table('tr:nth-child(3) th span').items():
+            for sitem in thr_row('th span').items():
                 if sitem('a').attr('href'):
                     rurls[sitem('a').text().strip()] = \
-                        urljoin(resp.url, sitem('a').attr('href')) if 'magnet' not in sitem('a').text().lower() else sitem(
+                        urljoin(resp.url, sitem('a').attr('href')) if 'magnet' not in sitem(
+                            'a').text().lower() else sitem(
                             'a').attr('href')
                 else:
                     rx = sitem('a').text()
@@ -178,7 +193,8 @@ def get_anime_info(anime_page_url: str, session: Optional[requests.Session] = No
 if __name__ == '__main__':
     logging.try_init_root(logging.INFO)
     session = get_session()
-    pprint(get_anime_info('https://www.erai-raws.info/anime-list/rezero-kara-hajimeru-isekai-seikatsu-3rd-season/'))
+    # pprint(get_anime_info('https://www.erai-raws.info/anime-list/rezero-kara-hajimeru-isekai-seikatsu-3rd-season/'))
+    pprint(get_anime_info('https://www.erai-raws.info/anime-list/ani-ni-tsukeru-kusuri-wa-nai-2/'))
     # for item in iter_anime_items(session=session):
     #     print(item)
     #     pprint(get_anime_info(item[1]))
