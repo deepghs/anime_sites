@@ -1,6 +1,7 @@
 import datetime
 import os.path
 from typing import Optional
+from urllib.parse import unquote_plus, quote
 
 import pandas as pd
 from ditk import logging
@@ -14,6 +15,10 @@ from tqdm import tqdm
 
 from .info import get_session, iter_anime_items, get_anime_info
 from ..utils import parallel_call, download_file
+
+
+def _url_safe(url):
+    return quote(unquote_plus(url), safe=':./')
 
 
 def sync(repository: str, proxy_pool: Optional[str] = None):
@@ -177,15 +182,15 @@ def sync(repository: str, proxy_pool: Optional[str] = None):
                     'Langs': ", ".join(iitem['langs']),
                     **{
                         name: (
-                            f'[{name}]({iitem["sec_links"][name].replace(" ", "+")})'
+                            f'[{name}]({_url_safe(iitem["sec_links"][name])})'
                             if iitem["sec_links"].get(name) else ''
                         ) for name in sec_names
                     },
                     **{
                         name: (
-                            f'[{name}]({iitem["resource_urls"][name].replace(" ", "+")})'
+                            f'[{name}]({_url_safe(iitem["resource_urls"][name])})'
                             if isinstance(iitem["resource_urls"][name], str) else
-                            f'[{name}]({iitem["resource_urls"][name]["torrent"].replace(" ", "+")})'
+                            f'[{name}]({_url_safe(iitem["resource_urls"][name]["torrent"])})'
                         ) if iitem["resource_urls"].get(name) else ''
                         for name in res_names
                     },
