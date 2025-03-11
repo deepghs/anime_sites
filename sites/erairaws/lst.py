@@ -33,17 +33,18 @@ def sync(repository: str, proxy_pool: Optional[str] = None):
         )
 
     session = get_session(no_login=False)
-    session_rss = get_session(no_login=True)
+    session_rss = [get_session(no_login=True) for _ in range(100)]
     if proxy_pool:
         logging.info(f'Proxy pool {proxy_pool!r} enabled.')
         session.proxies.update({
             'http': proxy_pool,
             'https': proxy_pool
         })
-        session_rss.proxies.update({
-            'http': proxy_pool,
-            'https': proxy_pool
-        })
+        for ss in session_rss:
+            ss.proxies.update({
+                'http': proxy_pool,
+                'https': proxy_pool
+            })
 
     anime_items = list(iter_anime_items(session=session))
     anime_records = []

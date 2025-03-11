@@ -1,6 +1,7 @@
 import os.path
+import random
 from pprint import pprint
-from typing import Optional
+from typing import Optional, Union, List
 from urllib.parse import urljoin
 
 import requests
@@ -40,7 +41,7 @@ def iter_anime_items(session: Optional[requests.Session] = None):
 
 
 def get_anime_info(anime_page_url: str, session: Optional[requests.Session] = None,
-                   session_rss: Optional[requests.Session] = None):
+                   session_rss: Optional[Union[List[requests.Session], requests.Session]] = None):
     session = session or get_session(no_login=False)
     session_rss = session_rss or get_session(no_login=True)
     resp = srequest(session, 'GET', anime_page_url)
@@ -91,7 +92,10 @@ def get_anime_info(anime_page_url: str, session: Optional[requests.Session] = No
     rss_items = []
     for res in ress:
         rss_item_url = str(magnet_url.add_query_param('res', res))
-        r = session_rss.get(rss_item_url)
+        if isinstance(session_rss, (list, tuple)):
+            r = random.choice(session_rss).get(rss_item_url)
+        else:
+            r = session_rss.get(rss_item_url)
         r.raise_for_status()
 
         rd = xmltodict.parse(r.text)
