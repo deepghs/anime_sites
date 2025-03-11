@@ -32,10 +32,15 @@ def sync(repository: str, proxy_pool: Optional[str] = None):
             os.linesep.join(attr_lines),
         )
 
-    session = get_session()
+    session = get_session(no_login=False)
+    session_rss = get_session(no_login=True)
     if proxy_pool:
         logging.info(f'Proxy pool {proxy_pool!r} enabled.')
         session.proxies.update({
+            'http': proxy_pool,
+            'https': proxy_pool
+        })
+        session_rss.proxies.update({
             'http': proxy_pool,
             'https': proxy_pool
         })
@@ -46,7 +51,7 @@ def sync(repository: str, proxy_pool: Optional[str] = None):
     for title, page_url in tqdm(anime_items[:10], desc='Animes'):
         logging.info(f'Processing {title!r}, page: {page_url!r} ...')
 
-        info = get_anime_info(page_url, session=session)
+        info = get_anime_info(page_url, session=session, session_rss=session_rss)
         if not info['mal_id']:
             logging.warning(f'No MAL ID found for {page_url!r}, skipped.')
             continue

@@ -13,11 +13,12 @@ from urlobject import URLObject
 from ..utils import get_requests_session, srequest
 
 
-def get_session():
+def get_session(no_login: bool = False):
     session = get_requests_session()
-    session.headers.update({
-        'Cookie': os.environ['ERAI_RAW_COOKIE'],
-    })
+    if not no_login:
+        session.headers.update({
+            'Cookie': os.environ['ERAI_RAW_COOKIE'],
+        })
     return session
 
 
@@ -38,8 +39,10 @@ def iter_anime_items(session: Optional[requests.Session] = None):
         raise ValueError(f'Invalid list, should be no less than 100 but {count} found.')
 
 
-def get_anime_info(anime_page_url: str, session: Optional[requests.Session] = None):
-    session = session or get_session()
+def get_anime_info(anime_page_url: str, session: Optional[requests.Session] = None,
+                   session_rss: Optional[requests.Session] = None):
+    session = session or get_session(no_login=False)
+    session_rss = session_rss or get_session(no_login=True)
     resp = srequest(session, 'GET', anime_page_url)
     page = pq(resp.text)
 
@@ -88,7 +91,7 @@ def get_anime_info(anime_page_url: str, session: Optional[requests.Session] = No
     rss_items = []
     for res in ress:
         rss_item_url = str(magnet_url.add_query_param('res', res))
-        r = session.get(rss_item_url)
+        r = session_rss.get(rss_item_url)
         r.raise_for_status()
 
         rd = xmltodict.parse(r.text)
