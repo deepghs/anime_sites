@@ -76,9 +76,9 @@ def sync(repository: str, proxy_pool: Optional[str] = None):
                     **item,
                 })
 
-    parallel_call(anime_items[:100], _fn_x, desc='Animes')
+    parallel_call(anime_items, _fn_x, desc='Animes')
 
-    # for title, page_url in tqdm(anime_items[:10], desc='Animes'):
+    # for title, page_url in tqdm(anime_items, desc='Animes'):
     #     logging.info(f'Processing {title!r}, page: {page_url!r} ...')
     #
     #     info = get_anime_info(page_url, session=session, session_rss=session_rss)
