@@ -172,8 +172,10 @@ def sync(repository: str, proxy_pool: Optional[str] = None):
                         for extname in ext_names
                     },
                     'Resources': len(aitem["resources"]),
-                    'Published At': datetime.datetime.fromtimestamp(aitem['published_at']).isoformat(),
-                    'Last Published At': datetime.datetime.fromtimestamp(aitem['last_published_at']).isoformat(),
+                    'Published At': (datetime.datetime.fromtimestamp(aitem['published_at']).isoformat()
+                                     if aitem['published_at'] else 'N/A'),
+                    'Last Published At': (datetime.datetime.fromtimestamp(aitem['last_published_at']).isoformat()
+                                          if aitem['last_published_at'] else 'N/A'),
                 })
             df_animes_shown = pd.DataFrame(animes_shown)
 
