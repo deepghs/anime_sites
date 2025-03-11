@@ -92,70 +92,71 @@ def get_anime_info(anime_page_url: str, session: Optional[requests.Session] = No
             break
 
     resources = []
-    for table in r_pane('table.table').items():
-        categories = [
-            c.attr('data-title')
-            for c in table('tr:nth-child(1) th a[data-title]').items()
-        ]
+    if r_pane:
+        for table in r_pane('table.table').items():
+            categories = [
+                c.attr('data-title')
+                for c in table('tr:nth-child(1) th a[data-title]').items()
+            ]
 
-        ititle = table('tr:nth-child(1) th a.aa_ss_ops_new').text().strip()
-        iurl = urljoin(resp.url, table('tr:nth-child(1) th a.aa_ss_ops_new').attr('href'))
+            ititle = table('tr:nth-child(1) th a.aa_ss_ops_new').text().strip()
+            iurl = urljoin(resp.url, table('tr:nth-child(1) th a.aa_ss_ops_new').attr('href'))
 
-        sec_links = {
-            x.text().strip(): urljoin(resp.url, x('a').attr('href')) if 'magnet' not in x.text().strip().lower() else x(
-                'a').attr('href')
-            for x in table('tr:nth-child(2) th a.sub_ddl_box').items()
-        }
-        langs = [
-            x.attr('data-title')
-            for x in table('tr:nth-child(2) th span.tooltip3[data-title]').items()
-        ]
-        publish_at_str = table('tr:nth-child(3) th font.clock_font').text()
-        published_at = dateparser.parse(publish_at_str).timestamp()
+            sec_links = {
+                x.text().strip(): urljoin(resp.url, x('a').attr('href')) if 'magnet' not in x.text().strip().lower() else x(
+                    'a').attr('href')
+                for x in table('tr:nth-child(2) th a.sub_ddl_box').items()
+            }
+            langs = [
+                x.attr('data-title')
+                for x in table('tr:nth-child(2) th span.tooltip3[data-title]').items()
+            ]
+            publish_at_str = table('tr:nth-child(3) th font.clock_font').text()
+            published_at = dateparser.parse(publish_at_str).timestamp()
 
-        rurls = {}
-        rx_maps = {}
-        for sitem in table('tr:nth-child(3) th span').items():
-            if sitem('a').attr('href'):
-                rurls[sitem('a').text().strip()] = \
-                    urljoin(resp.url, sitem('a').attr('href')) if 'magnet' not in sitem('a').text().lower() else sitem(
-                        'a').attr('href')
-            else:
-                rx = sitem('a').text()
-                rx_maps[rx] = sitem.attr('id')
+            rurls = {}
+            rx_maps = {}
+            for sitem in table('tr:nth-child(3) th span').items():
+                if sitem('a').attr('href'):
+                    rurls[sitem('a').text().strip()] = \
+                        urljoin(resp.url, sitem('a').attr('href')) if 'magnet' not in sitem('a').text().lower() else sitem(
+                            'a').attr('href')
+                else:
+                    rx = sitem('a').text()
+                    rx_maps[rx] = sitem.attr('id')
 
-        if rx_maps:
-            for rx, rx_id in rx_maps.items():
-                span_text = table(f'tr[class~={json.dumps(rx_id)}] th > span:nth-child(1)').text()
-                span_segs = span_text.split('|', maxsplit=2)
-                size_text = None
-                ext_info = None
-                for seg in span_segs:
-                    seg = seg.strip()
-                    if 'size' in seg.lower():
-                        size_text = seg.split(':', maxsplit=1)[-1].strip()
-                    elif size_text is not None:
-                        ext_info = seg
+            if rx_maps:
+                for rx, rx_id in rx_maps.items():
+                    span_text = table(f'tr[class~={json.dumps(rx_id)}] th > span:nth-child(1)').text()
+                    span_segs = span_text.split('|', maxsplit=2)
+                    size_text = None
+                    ext_info = None
+                    for seg in span_segs:
+                        seg = seg.strip()
+                        if 'size' in seg.lower():
+                            size_text = seg.split(':', maxsplit=1)[-1].strip()
+                        elif size_text is not None:
+                            ext_info = seg
 
-                rurls[rx] = {
-                    'size': size_text,
-                    'ext': ext_info,
-                }
-                for ax in table(f'tr[class~={json.dumps(rx_id)}] th > a').items():
-                    rurls[rx][ax.text().strip()] = \
-                        urljoin(resp.url, ax.attr('href')) if 'magnet' not in ax.text().lower() else \
-                            ax.attr('href')
+                    rurls[rx] = {
+                        'size': size_text,
+                        'ext': ext_info,
+                    }
+                    for ax in table(f'tr[class~={json.dumps(rx_id)}] th > a').items():
+                        rurls[rx][ax.text().strip()] = \
+                            urljoin(resp.url, ax.attr('href')) if 'magnet' not in ax.text().lower() else \
+                                ax.attr('href')
 
-        item = {
-            'title': ititle,
-            'page_url': iurl,
-            'categories': categories,
-            'sec_links': sec_links,
-            'langs': langs,
-            'published_at': published_at,
-            'resource_urls': rurls,
-        }
-        resources.append(item)
+            item = {
+                'title': ititle,
+                'page_url': iurl,
+                'categories': categories,
+                'sec_links': sec_links,
+                'langs': langs,
+                'published_at': published_at,
+                'resource_urls': rurls,
+            }
+            resources.append(item)
 
     return {
         'id': id_,
