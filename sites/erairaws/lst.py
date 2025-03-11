@@ -18,7 +18,7 @@ from ..utils import parallel_call, download_file
 
 
 def _url_safe(url):
-    return quote(unquote_plus(url), safe=':./?&#=')
+    return quote(unquote_plus(url), safe=':/?#[]@!$&\'()*+,;=').replace('(', '%28').replace(')', '%29')
 
 
 def sync(repository: str, proxy_pool: Optional[str] = None):
