@@ -1,5 +1,6 @@
 import datetime
 import os.path
+from threading import Lock
 from typing import Optional
 from urllib.parse import unquote_plus, quote
 
@@ -11,7 +12,6 @@ from hfutils.cache import delete_detached_cache
 from hfutils.operate import download_directory_as_directory, get_hf_client, get_hf_fs, upload_directory_as_directory
 from hfutils.utils import number_to_tag
 from huggingface_hub import hf_hub_url
-from tqdm import tqdm
 
 from .info import get_session, iter_anime_items, get_anime_info
 from ..utils import parallel_call, download_file
@@ -53,24 +53,47 @@ def sync(repository: str, proxy_pool: Optional[str] = None):
     anime_items = list(iter_anime_items(session=session))
     anime_records = []
     item_records = []
-    for title, page_url in tqdm(anime_items[:10], desc='Animes'):
-        logging.info(f'Processing {title!r}, page: {page_url!r} ...')
+    lock = Lock()
 
+    def _fn_x(ax):
+        title, page_url = ax
         info = get_anime_info(page_url, session=session, session_rss=session_rss)
         if not info['mal_id']:
             logging.warning(f'No MAL ID found for {page_url!r}, skipped.')
-            continue
+            return
 
-        _, ext = os.path.splitext(urlsplit(info['poster_url']).filename)
-        anime_records.append({
-            **info,
-            'poster_filename': f'{info["id"]}{ext}',
-        })
-        for item in info['resources']:
-            item_records.append({
-                'mal_id': info['mal_id'],
-                **item,
+        with lock:
+            _, ext = os.path.splitext(urlsplit(info['poster_url']).filename)
+            anime_records.append({
+                **info,
+                'poster_filename': f'{info["id"]}{ext}',
             })
+            for item in info['resources']:
+                item_records.append({
+                    'mal_id': info['mal_id'],
+                    **item,
+                })
+
+    parallel_call(anime_items[:100], _fn_x, desc='Animes')
+
+    # for title, page_url in tqdm(anime_items[:10], desc='Animes'):
+    #     logging.info(f'Processing {title!r}, page: {page_url!r} ...')
+    #
+    #     info = get_anime_info(page_url, session=session, session_rss=session_rss)
+    #     if not info['mal_id']:
+    #         logging.warning(f'No MAL ID found for {page_url!r}, skipped.')
+    #         continue
+    #
+    #     _, ext = os.path.splitext(urlsplit(info['poster_url']).filename)
+    #     anime_records.append({
+    #         **info,
+    #         'poster_filename': f'{info["id"]}{ext}',
+    #     })
+    #     for item in info['resources']:
+    #         item_records.append({
+    #             'mal_id': info['mal_id'],
+    #             **item,
+    #         })
 
     with TemporaryDirectory() as upload_dir:
         df_animes = pd.DataFrame(anime_records)
