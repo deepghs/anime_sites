@@ -156,7 +156,7 @@ def sync(repository: str, proxy_pool: Optional[str] = None):
             for aitem in df_animes.to_dict('records'):
                 ext_names.extend(aitem['external_links'])
             ext_names = sorted(set(ext_names))
-            for aitem in df_animes.replace(np.nan, None).to_dict('records'):
+            for aitem in df_animes[~df_animes['published_at'].isnull()][:500].replace(np.nan, None).to_dict('records'):
                 poster_shown_url = hf_hub_url(
                     repo_id=repository,
                     repo_type='dataset',
@@ -182,14 +182,10 @@ def sync(repository: str, proxy_pool: Optional[str] = None):
 
             print(f'# Animes', file=f)
             print(f'', file=f)
-            print(f'{plural_word(len(df_animes), "anime")} in total.', file=f)
+            print(f'{plural_word(len(df_animes), "anime")} in total, '
+                  f'{plural_word(len(df_animes_shown), "anime")} shown.', file=f)
             print(f'', file=f)
             print(df_animes_shown.to_markdown(index=False), file=f)
-            print(f'', file=f)
-
-            print(f'# Resources', file=f)
-            print(f'', file=f)
-            print(f'{plural_word(len(df_items), "resources")} in total.', file=f)
             print(f'', file=f)
 
             sec_names = []
@@ -224,6 +220,12 @@ def sync(repository: str, proxy_pool: Optional[str] = None):
                     'Published At': datetime.datetime.fromtimestamp(iitem['published_at']).isoformat(),
                 })
             df_items_shown = pd.DataFrame(items_shown)
+
+            print(f'# Resources', file=f)
+            print(f'', file=f)
+            print(f'{plural_word(len(df_items), "resource")} in total, '
+                  f'{plural_word(len(df_items_shown), "resource")} shown.', file=f)
+            print(f'', file=f)
             print(df_items_shown.to_markdown(index=False), file=f)
             print(f'', file=f)
 
