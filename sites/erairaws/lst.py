@@ -138,8 +138,8 @@ def sync(repository: str, proxy_pool: Optional[str] = None):
                     'Bangumi': f'[{aitem["title"]}]({aitem["page_url"]})',
                     'RSS': f'[RSS]({aitem["rss_url"]})' if aitem['rss_url'] else '',
                     **{
-                        extname: f'[{extname}]({aitem["external_links"][extname]})' if aitem["external_links"].get(
-                            extname) else ''
+                        extname: f'[{extname}]({aitem["external_links"][extname]})'
+                        if aitem["external_links"].get(extname) else ''
                         for extname in ext_names
                     },
                     'Resources': len(aitem["resources"]),
@@ -176,14 +176,16 @@ def sync(repository: str, proxy_pool: Optional[str] = None):
                     'Categories': ", ".join(iitem['categories']),
                     'Langs': ", ".join(iitem['langs']),
                     **{
-                        name: f'[{name}]({iitem["sec_links"][name]})' if iitem["sec_links"].get(name) else ''
-                        for name in sec_names
+                        name: (
+                            f'[{name}]({iitem["sec_links"][name].replace(" ", "+")})'
+                            if iitem["sec_links"].get(name) else ''
+                        ) for name in sec_names
                     },
                     **{
                         name: (
-                            f'[{name}]({iitem["resource_urls"][name]})'
+                            f'[{name}]({iitem["resource_urls"][name].replace(" ", "+")})'
                             if isinstance(iitem["resource_urls"][name], str) else
-                            f'[{name}]({iitem["resource_urls"][name]["magnet"]})'
+                            f'[{name}]({iitem["resource_urls"][name]["torrent"]})'
                         ) if iitem["resource_urls"].get(name) else ''
                         for name in res_names
                     },
