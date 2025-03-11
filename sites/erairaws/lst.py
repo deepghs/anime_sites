@@ -4,6 +4,7 @@ from threading import Lock
 from typing import Optional
 from urllib.parse import unquote_plus, quote
 
+import numpy as np
 import pandas as pd
 from ditk import logging
 from hbutils.string import plural_word
@@ -155,7 +156,7 @@ def sync(repository: str, proxy_pool: Optional[str] = None):
             for aitem in df_animes.to_dict('records'):
                 ext_names.extend(aitem['external_links'])
             ext_names = sorted(set(ext_names))
-            for aitem in df_animes.to_dict('records'):
+            for aitem in df_animes.replace(np.nan, None).to_dict('records'):
                 poster_shown_url = hf_hub_url(
                     repo_id=repository,
                     repo_type='dataset',
