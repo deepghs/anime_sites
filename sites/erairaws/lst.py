@@ -48,7 +48,7 @@ def sync(repository: str, proxy_pool: Optional[str] = None):
     anime_items = list(iter_anime_items(session=session))
     anime_records = []
     item_records = []
-    for title, page_url in tqdm(anime_items[:10], desc='Animes'):
+    for title, page_url in tqdm(anime_items[:100], desc='Animes'):
         logging.info(f'Processing {title!r}, page: {page_url!r} ...')
 
         info = get_anime_info(page_url, session=session, session_rss=session_rss)
