@@ -2,7 +2,6 @@ import datetime
 import os.path
 from typing import Optional
 
-import dateparser
 import pandas as pd
 from ditk import logging
 from hbutils.string import plural_word
@@ -49,7 +48,7 @@ def sync(repository: str, proxy_pool: Optional[str] = None):
     anime_items = list(iter_anime_items(session=session))
     anime_records = []
     item_records = []
-    for title, page_url in tqdm(anime_items[:100], desc='Animes'):
+    for title, page_url in tqdm(anime_items[:10], desc='Animes'):
         logging.info(f'Processing {title!r}, page: {page_url!r} ...')
 
         info = get_anime_info(page_url, session=session, session_rss=session_rss)
@@ -61,16 +60,11 @@ def sync(repository: str, proxy_pool: Optional[str] = None):
         anime_records.append({
             **info,
             'poster_filename': f'{info["id"]}{ext}',
-            'last_published_at': max([
-                dateparser.parse(item['pubDate']).timestamp()
-                for item in info['rss_items']
-            ]) if info['rss_items'] else None,
         })
-        for item in info['rss_items']:
+        for item in info['resources']:
             item_records.append({
                 'mal_id': info['mal_id'],
                 **item,
-                'published_at': dateparser.parse(item['pubDate']).timestamp(),
             })
 
     with TemporaryDirectory() as upload_dir:
@@ -142,14 +136,14 @@ def sync(repository: str, proxy_pool: Optional[str] = None):
                     'ID': aitem['mal_id'],
                     'Post': f'[![{aitem["id"]}]({poster_shown_url})]({aitem["external_links"]["MAL"]})',
                     'Bangumi': f'[{aitem["title"]}]({aitem["page_url"]})',
-                    'Resolution': aitem["rss_items_res"],
                     'RSS': f'[RSS]({aitem["rss_url"]})' if aitem['rss_url'] else '',
                     **{
                         extname: f'[{extname}]({aitem["external_links"][extname]})' if aitem["external_links"].get(
                             extname) else ''
                         for extname in ext_names
                     },
-                    'Magnets': len(aitem["rss_items"]),
+                    'Resources': len(aitem["resources"]),
+                    'Published At': datetime.datetime.fromtimestamp(aitem['published_at']).isoformat(),
                     'Last Published At': datetime.datetime.fromtimestamp(aitem['last_published_at']).isoformat(),
                 })
             df_animes_shown = pd.DataFrame(animes_shown)
@@ -165,17 +159,35 @@ def sync(repository: str, proxy_pool: Optional[str] = None):
             print(f'', file=f)
             print(f'{plural_word(len(df_items), "resources")} in total.', file=f)
             print(f'', file=f)
+
+            sec_names = []
+            res_names = []
+            for iitem in df_items.to_dict('records'):
+                sec_names.extend(iitem['sec_links'].keys())
+                res_names.extend(iitem['resource_urls'].keys())
+            sec_names = sorted(set(sec_names))
+            res_names = sorted(set(res_names))
+
             items_shown = []
             for iitem in df_items[:50].to_dict('records'):
                 items_shown.append({
                     'Anime ID': iitem['mal_id'],
-                    'Title': iitem['title'],
-                    'Resolution': iitem['erai:resolution'],
-                    'Category': iitem['erai:category'],
-                    'Size': iitem['erai:size'],
-                    'InfoHash': iitem['erai:infohash'],
-                    'Subtitles': iitem['erai:subtitles'],
-                    'Published At': iitem['pubDate'],
+                    'Title': f'[{iitem["title"]}]({iitem["page_url"]})',
+                    'Categories': ", ".join(iitem['categories']),
+                    'Langs': ", ".join(iitem['langs']),
+                    **{
+                        name: f'[{name}]({iitem["sec_links"][name]})' if iitem["sec_links"].get(name) else ''
+                        for name in sec_names
+                    },
+                    **{
+                        name: (
+                            f'[{name}]({iitem["resource_urls"][name]})'
+                            if isinstance(iitem["resource_urls"][name], str) else
+                            f'[{name}]({iitem["resource_urls"][name]["magnet"]})'
+                        ) if iitem["resource_urls"].get(name) else ''
+                        for name in res_names
+                    },
+                    'Published At': datetime.datetime.fromtimestamp(iitem['published_at']).isoformat(),
                 })
             df_items_shown = pd.DataFrame(items_shown)
             print(df_items_shown.to_markdown(index=False), file=f)

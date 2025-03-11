@@ -1,15 +1,14 @@
+import json
 import os.path
-import random
 from pprint import pprint
 from typing import Optional, Union, List
 from urllib.parse import urljoin
 
+import dateparser
 import requests
-import xmltodict
 from ditk import logging
 from hbutils.system import urlsplit
 from pyquery import PyQuery as pq
-from urlobject import URLObject
 
 from ..utils import get_requests_session, srequest
 
@@ -86,26 +85,77 @@ def get_anime_info(anime_page_url: str, session: Optional[requests.Session] = No
     else:
         mal_id = None
 
-    ress = ['1080p', '720p', 'SD']
-    magnet_url = URLObject(rss_url).add_query_param('type', 'magnet')
-    rss_items_res = None
-    rss_items = []
-    for res in ress:
-        rss_item_url = str(magnet_url.add_query_param('res', res))
-        if isinstance(session_rss, (list, tuple)):
-            r = random.choice(session_rss).get(rss_item_url)
-        else:
-            r = session_rss.get(rss_item_url)
-        r.raise_for_status()
-
-        rd = xmltodict.parse(r.text)
-        items = rd['rss']['channel'].get('item')
-        if items:
-            if not isinstance(items, list):
-                items = [items]
-            rss_items = items
-            rss_items_res = res
+    r_pane = None
+    for pane in main('.tab-content > .tab-pane').items():
+        if 'all release' in pane('h4.alphabet-title').text().strip().lower():
+            r_pane = pane
             break
+
+    resources = []
+    for table in r_pane('table.table').items():
+        categories = [
+            c.attr('data-title')
+            for c in table('tr:nth-child(1) th a[data-title]').items()
+        ]
+
+        ititle = table('tr:nth-child(1) th a.aa_ss_ops_new').text().strip()
+        iurl = urljoin(resp.url, table('tr:nth-child(1) th a.aa_ss_ops_new').attr('href'))
+
+        sec_links = {
+            x.text().strip(): urljoin(resp.url, x('a').attr('href')) if 'magnet' not in x.text().strip().lower() else x(
+                'a').attr('href')
+            for x in table('tr:nth-child(2) th a.sub_ddl_box').items()
+        }
+        langs = [
+            x.attr('data-title')
+            for x in table('tr:nth-child(2) th span.tooltip3[data-title]').items()
+        ]
+        publish_at_str = table('tr:nth-child(3) th font.clock_font').text()
+        published_at = dateparser.parse(publish_at_str).timestamp()
+
+        rurls = {}
+        rx_maps = {}
+        for sitem in table('tr:nth-child(3) th span').items():
+            if sitem('a').attr('href'):
+                rurls[sitem('a').text().strip()] = \
+                    urljoin(resp.url, sitem('a').attr('href')) if 'magnet' not in sitem('a').text().lower() else sitem(
+                        'a').attr('href')
+            else:
+                rx = sitem('a').text()
+                rx_maps[rx] = sitem.attr('id')
+
+        if rx_maps:
+            for rx, rx_id in rx_maps.items():
+                span_text = table(f'tr[class~={json.dumps(rx_id)}] th > span:nth-child(1)').text()
+                span_segs = span_text.split('|', maxsplit=2)
+                size_text = None
+                ext_info = None
+                for seg in span_segs:
+                    seg = seg.strip()
+                    if 'size' in seg.lower():
+                        size_text = seg.split(':', maxsplit=1)[-1].strip()
+                    elif size_text is not None:
+                        ext_info = seg
+
+                rurls[rx] = {
+                    'size': size_text,
+                    'ext': ext_info,
+                }
+                for ax in table(f'tr[class~={json.dumps(rx_id)}] th > a').items():
+                    rurls[rx][ax.text().strip()] = \
+                        urljoin(resp.url, ax.attr('href')) if 'magnet' not in ax.text().lower() else \
+                            ax.attr('href')
+
+        item = {
+            'title': ititle,
+            'page_url': iurl,
+            'categories': categories,
+            'sec_links': sec_links,
+            'langs': langs,
+            'published_at': published_at,
+            'resource_urls': rurls,
+        }
+        resources.append(item)
 
     return {
         'id': id_,
@@ -118,8 +168,9 @@ def get_anime_info(anime_page_url: str, session: Optional[requests.Session] = No
         'other_links': other_links,
         'related': related,
         'rss_url': rss_url,
-        'rss_items_res': rss_items_res,
-        'rss_items': rss_items,
+        'resources': resources,
+        'last_published_at': max(x['published_at'] for x in resources) if resources else None,
+        'published_at': min(x['published_at'] for x in resources) if resources else None,
     }
 
 
