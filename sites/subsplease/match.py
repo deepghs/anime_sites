@@ -211,7 +211,7 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
                     print(f'', file=f)
 
                     lst_success = []
-                    for item in df_success.to_dict('records'):
+                    for item in df_success[:500].to_dict('records'):
                         if d_subs_images.get(item['page_id']):
                             subs_image_url = hf_hub_url(
                                 repo_id=repository,
@@ -261,7 +261,7 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
                     print(f'', file=f)
 
                     lst_failed = []
-                    for item in df_failed.to_dict('records'):
+                    for item in df_failed[:500].to_dict('records'):
                         if d_subs_images.get(item['page_id']):
                             subs_image_url = hf_hub_url(
                                 repo_id=repository,
