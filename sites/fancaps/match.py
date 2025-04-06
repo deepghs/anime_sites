@@ -14,6 +14,7 @@ from hfutils.operate import get_hf_client, get_hf_fs, upload_directory_as_direct
 from hfutils.utils import number_to_tag, hf_normpath
 from huggingface_hub import hf_hub_url
 from pyrate_limiter import Rate, Limiter, Duration
+from tqdm import tqdm
 
 from .data import _get_mappings
 from .llm import get_full_info_for_fancaps
@@ -244,7 +245,7 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
             _last_update = time.time()
             _total_count = len(df_animes)
 
-        for fitem in _get_mappings():
+        for fitem in tqdm(_get_mappings(), desc='Animes'):
             page_id = fitem['id']
 
             if page_id in d_animes and d_animes[page_id]['mal_id']:
