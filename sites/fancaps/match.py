@@ -196,7 +196,7 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
                         lst_success.append({
                             'Fancaps ID': item['fancaps_id'],
                             'Fancaps Title': fancaps_title,
-                            'Episodes': len(item['episodes']),
+                            'Episodes': len(item['fancaps_episodes']),
                             'MAL ID': item['mal_id'],
                             'MAL Cover': mal_cover,
                             'MAL Title': mal_title,
@@ -223,7 +223,7 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
                         lst_failed.append({
                             'Fancaps ID': item['fancaps_id'],
                             'Fancaps Title': fancaps_title,
-                            'Episodes': len(item['episodes']),
+                            'Episodes': len(item['fancaps_episodes']),
                             'Year': int(item['year']) if item['year'] else 'N/A',
                             'Reason': item['reason'],
                         })
