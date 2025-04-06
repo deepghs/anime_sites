@@ -1,13 +1,15 @@
 import io
 import json
 import re
+from collections import defaultdict
 from pprint import pprint, pformat
 from typing import Optional, List
 
+import requests
 from ditk import logging
 from hbutils.string import plural_word
 
-from ..utils import get_openai_client, get_items_from_myanimelist
+from ..utils import get_openai_client, get_items_from_myanimelist, get_requests_session
 
 _DEFAULT_MODEL = 'openai/gpt-4o'
 
@@ -159,10 +161,59 @@ def _ask_chatgpt(bg_item, search_result: Optional[List[dict]] = None,
     raise RuntimeError(f'Unable to get result for {title!r}')
 
 
+def get_full_info_for_fancaps(bg_item, model_name: str = _DEFAULT_MODEL, val_times: int = 5, min_val: int = 4,
+                              session: Optional[requests.Session] = None):
+    session = session or get_requests_session()
+    search_result = get_items_from_myanimelist(bg_item['title'], session=session)
+
+    vals = []
+    mal_ids = defaultdict(lambda: 0)
+    d_mal_vals = {}
+    for i in range(val_times):
+        logging.info(f'Val {i + 1} / {val_times} for {bg_item["title"]!r} ...')
+        val = _ask_chatgpt(bg_item, search_result=search_result, model_name=model_name)
+        vals.append(val)
+        mal_ids[val['mal_id']] += 1
+        if val['mal_id'] not in d_mal_vals:
+            d_mal_vals[val['mal_id']] = val
+
+    if None in mal_ids:
+        del mal_ids[None]
+
+    for mal_id, count in mal_ids.items():
+        if mal_id and count >= min_val:
+            logging.info(f'Match success, the final result is #{mal_id!r}.\n'
+                         f'Reason: {d_mal_vals[mal_id]["reason"]}')
+            return {
+                **d_mal_vals[mal_id],
+                'fancaps': bg_item
+            }
+
+    if None in d_mal_vals:
+        reason = d_mal_vals[None]["reason"]
+        logging.warning(f'Match failed.\nReason: {reason}')
+        return {
+            **d_mal_vals[None],
+            'fancaps': bg_item,
+        }
+    else:
+        reason = f'Cannot determine which anime it is due to the complex result ' \
+                 f'in {plural_word(val_times, "time")}: {dict(mal_ids)!r}'
+        logging.warning(f'Match failed.\nReason: {reason}')
+        return {
+            'mal_id': None,
+            'title': None,
+            'reason': reason,
+            'mal': None,
+            'year': list(d_mal_vals.values())[0]['year'],
+            'fancaps': bg_item,
+        }
+
+
 if __name__ == '__main__':
     logging.try_init_root(level=logging.INFO)
     from .data import _get_mappings
 
     bgs = _get_mappings()
-    pprint(_ask_chatgpt(bg_item=bgs[-1]))
+    pprint(get_full_info_for_fancaps(bg_item=bgs[-1]))
     # pprint(get_items_from_myanimelist('The Girl in Twilight'))
