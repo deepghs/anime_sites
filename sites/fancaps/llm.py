@@ -1,37 +1,34 @@
 import io
 import json
 import re
-from collections import defaultdict
-from pprint import pformat
+from pprint import pprint, pformat
 from typing import Optional, List
 
-import requests
 from ditk import logging
 from hbutils.string import plural_word
 
-from .info import get_info_from_subsplease
-from ..utils import get_requests_session, get_openai_client, get_items_from_myanimelist
+from ..utils import get_openai_client, get_items_from_myanimelist
 
 _DEFAULT_MODEL = 'openai/gpt-4o'
 
 _SYSTEM_TEXT = """
-Translation of the provided content for use in a large language model prompt: You are an anime information 
-filtering assistant. Based on the anime titles I provide (which may be abbreviated titles), 
-the synopsis of the anime, and the results I retrieve from the MyAnimeList website's search API (in JSON format), 
-determine which one of the search results corresponds to the anime I am looking for, and output the corresponding 
-'mal_id' and 'title' and 'year' values.
+You are an effective assistant for matching anime information between fancaps.net and myanimelist websites. 
+I will provide an anime id/title (in English) from fancaps.net, along with the number of episodes included on 
+the fancaps website and some episode titles (representing only fancaps data, episodes may be missing; also, 
+some anime titles might have meaningless content like "episode 1/2/3"), and search results from myanimelist 
+website (in JSON format). You need to identify the most accurate match for the fancaps anime from the search results. 
+including its mal_id, title from mal and year.
 
-If there are multiple potential matches, please identify the best match based on the information provided. 
-If none of them can be matched, then return "No match found".
-
-Translation: The key aspects you should check include:
-1. Title, to see if any names, aliases, or names in other languages provided in the search results match.
-   (but sometimes the title will have many different aliases which the search result not included, please attention that)
-2. Synopsis (if provided), to check if the main content and summary of the anime provided are essentially consistent with those provided.
-3. Status (if episode information is provided), to verify whether the current status of the anime 
-   (Not yet aired/Currently Airing/Finished Airing) matches with the search results.
-4. Year (if episode information is provided), to check if the year information of each episode of the anime 
-   matches with the years provided in the search results.
+Please note the following:
+1. Prioritize matching based on the anime's name, translations, and alternative titles
+2. You can reference episode count information, but keep in mind that data on fancaps website may not be 
+   absolutely accurate, so this point cannot be definitive
+3. You can also check the synopsis (if provided), to check if the main content and summary of the anime provided 
+   are essentially consistent with those provided.
+3. If there are multiple potential matches, please provide only one most accurate match, such as a specific 
+   season within the same anime series
+4. There may be cases where no matching result can be found, in which case you should output "none" as the result, 
+   rather than forcing a match with an unrelated result
 
 For the year field:
 1. It should be an integer, mainly inferred from the anime information provided.
@@ -43,16 +40,14 @@ For the year field:
    The year result should be the year which the first episode is released.
 5. If there is truly no information at all, return the "null". 
 
-When best match is found, reply as the following format:
+When the best match is found, output in the following format:
 
 mal_id: xxxxx (should be an integer)
 title: xxxxxxxxxx (should be a string)
 year: xxxx (should be an integer, mainly inferred from the anime information provided)
-reason: xxxxxx
+reason: xxxxxx (The reason should be strictly on a single line, multiple lines for reasons are not allowed)
 
-The Reason should be in a line.
-
-When no match is found, reply as the following format:
+When no search result is found, output in the following format:
 
 mal_id: null
 title: null
@@ -101,9 +96,11 @@ def _parse_output(output: str):
     }
 
 
-def _ask_chatgpt(title: str, synopsis: Optional[str] = None, search_result: Optional[List[dict]] = None,
+def _ask_chatgpt(bg_item, search_result: Optional[List[dict]] = None,
                  model_name: str = _DEFAULT_MODEL, max_tries: int = 5):
     client = get_openai_client()
+    title = bg_item['title']
+    episode_titles = [x['title'] for x in bg_item['episodes']]
 
     if search_result is None:
         search_result = get_items_from_myanimelist(title)
@@ -112,9 +109,11 @@ def _ask_chatgpt(title: str, synopsis: Optional[str] = None, search_result: Opti
     with io.StringIO() as sf:
         print(f'Anime Title: {title!r}', file=sf)
         print(f'', file=sf)
-        if synopsis:
-            print(f'Anime Synopsis:', file=sf)
-            print(f'{synopsis}', file=sf)
+        if episode_titles:
+            print(f'Episode Title ({plural_word(len(episode_titles), "episode")} in total, '
+                  f'only first {len(episode_titles[:50])} are shown):', file=sf)
+            for et in episode_titles[:50]:
+                print(f'- {et!r}', file=sf)
             print(f'', file=sf)
 
         print(f'Search Result:', file=sf)
@@ -160,56 +159,10 @@ def _ask_chatgpt(title: str, synopsis: Optional[str] = None, search_result: Opti
     raise RuntimeError(f'Unable to get result for {title!r}')
 
 
-def get_full_info_for_subsplease(url, model_name: str = _DEFAULT_MODEL, val_times: int = 5, min_val: int = 4,
-                                 session: Optional[requests.Session] = None):
-    session = session or get_requests_session()
-    info = get_info_from_subsplease(url, session=session)
-    search_result = get_items_from_myanimelist(info['title'], session=session)
-    subsplease_info = {
-        'url': url,
-        **{key: value for key, value in info.items() if key != 'prompt'},
-    }
+if __name__ == '__main__':
+    logging.try_init_root(level=logging.INFO)
+    from .data import _get_mappings
 
-    vals = []
-    mal_ids = defaultdict(lambda: 0)
-    d_mal_vals = {}
-    for i in range(val_times):
-        logging.info(f'Val {i + 1} / {val_times} for {info["title"]!r} ...')
-        val = _ask_chatgpt(info['title'], synopsis=info['prompt'],
-                           search_result=search_result, model_name=model_name)
-        vals.append(val)
-        mal_ids[val['mal_id']] += 1
-        if val['mal_id'] not in d_mal_vals:
-            d_mal_vals[val['mal_id']] = val
-
-    if None in mal_ids:
-        del mal_ids[None]
-
-    for mal_id, count in mal_ids.items():
-        if mal_id and count >= min_val:
-            logging.info(f'Match success, the final result is #{mal_id!r}.\n'
-                         f'Reason: {d_mal_vals[mal_id]["reason"]}')
-            return {
-                **d_mal_vals[mal_id],
-                'subsplease': subsplease_info
-            }
-
-    if None in d_mal_vals:
-        reason = d_mal_vals[None]["reason"]
-        logging.warning(f'Match failed.\nReason: {reason}')
-        return {
-            **d_mal_vals[None],
-            'subsplease': subsplease_info,
-        }
-    else:
-        reason = f'Cannot determine which anime it is due to the complex result ' \
-                 f'in {plural_word(val_times, "time")}: {dict(mal_ids)!r}'
-        logging.warning(f'Match failed.\nReason: {reason}')
-        return {
-            'mal_id': None,
-            'title': None,
-            'reason': reason,
-            'mal': None,
-            'year': list(d_mal_vals.values())[0]['year'],
-            'subsplease': subsplease_info,
-        }
+    bgs = _get_mappings()
+    pprint(_ask_chatgpt(bg_item=bgs[-1]))
+    # pprint(get_items_from_myanimelist('The Girl in Twilight'))
