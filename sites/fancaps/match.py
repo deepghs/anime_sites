@@ -206,8 +206,8 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
                             # 'Season': item['mal_season'],
                             # 'Duration': item['mal_duration'],
                             'Episodes': f'{item["fancaps_episodes"]} / {int(item["mal_episodes"]) if item["mal_episodes"] else "?"}',
-                            'Status': item['mal_status'] if item['mal_airing'] else f'**{item["mal_status"]}**',
-                            'Score': item['mal_score'],
+                            # 'Status': item['mal_status'] if item['mal_airing'] else f'**{item["mal_status"]}**',
+                            # 'Score': item['mal_score'],
                         })
 
                     df_lst_success = pd.DataFrame(lst_success)
