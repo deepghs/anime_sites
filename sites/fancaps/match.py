@@ -176,7 +176,7 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
                     print(f'', file=f)
 
                     lst_success = []
-                    for item in df_success[:400].to_dict('records'):
+                    for item in df_success[:300].to_dict('records'):
                         if d_mal_images.get(item['mal_id']):
                             mal_image_url = hf_hub_url(
                                 repo_id=repository,
