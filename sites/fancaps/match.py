@@ -198,15 +198,20 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
                         lst_success.append({
                             'Fancaps ID': item['fancaps_id'],
                             'Fancaps Title': fancaps_title,
-                            'Episodes': len(item['fancaps_episodes']),
                             'MAL ID': item['mal_id'],
                             'MAL Cover': mal_cover,
                             'MAL Title': mal_title,
                             'Year': int(item['year']) if item['year'] else 'N/A',
                             # 'Reason': item['reason'],
+                            'Season': item['mal_season'],
+                            'Duration': item['mal_duration'],
+                            'Episodes': f'{item["fancaps_episodes"]} / {int(item["mal_episodes"]) if item["mal_episodes"] else "?"}',
+                            'Status': item['mal_status'] if item['mal_airing'] else f'**{item["mal_status"]}**',
+                            'Score': item['mal_score'],
                         })
 
                     df_lst_success = pd.DataFrame(lst_success)
+                    df_lst_success = df_lst_success.replace(np.nan, 'N/A')
                     print(df_lst_success.to_markdown(index=False), file=f)
                     print(f'', file=f)
 
@@ -232,6 +237,7 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
                         })
 
                     df_lst_failed = pd.DataFrame(lst_failed)
+                    df_lst_failed = df_lst_failed.replace(np.nan, 'N/A')
                     print(df_lst_failed.to_markdown(index=False), file=f)
                     print(f'', file=f)
 
