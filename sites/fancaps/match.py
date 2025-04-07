@@ -187,6 +187,7 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
                             mal_image_url = None
 
                         fancaps_title = item['fancaps_title']
+                        fancaps_title = fancaps_title.replace('`', ' ').replace('[', '(').replace(']', ')')
                         if item['fancaps_url']:
                             fancaps_title = f'[{fancaps_title}]({item["fancaps_url"]})'
                         mal_cover = f'![{item["mal_id"]}]({mal_image_url})' if mal_image_url else 'N/A'
@@ -219,6 +220,7 @@ def sync(repository: str, upload_time_span: float = 30.0, deploy_span: float = 5
                     lst_failed = []
                     for item in df_failed[:500].to_dict('records'):
                         fancaps_title = item['fancaps_title']
+                        fancaps_title = fancaps_title.replace('`', ' ').replace('[', '(').replace(']', ')')
                         if item['fancaps_url']:
                             fancaps_title = f'[{fancaps_title}]({item["fancaps_url"]})'
                         lst_failed.append({
