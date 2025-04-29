@@ -333,7 +333,7 @@ if __name__ == '__main__':
     sync(
         repository='deepghs/subsplease_mal',
         proxy_pool=os.environ['PP_SITE'],
-        sync_mode=False,
+        sync_mode=True,
         change_items=[
             # ('https://subsplease.org/shows/cardfight-vanguard-willdress/', 49819),
             # ('https://subsplease.org/shows/gunma-chan/', 49184),
