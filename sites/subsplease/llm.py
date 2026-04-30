@@ -1,7 +1,6 @@
 import io
 import json
 import os
-import re
 from collections import defaultdict
 from pprint import pformat
 from typing import Optional, List
@@ -16,90 +15,173 @@ from ..utils import get_requests_session, get_openai_client, get_items_from_myan
 _DEFAULT_MODEL = os.environ.get('LLM_MODEL_NAME') or 'openai/gpt-4o-mini'
 
 _SYSTEM_TEXT = """
-You are a strict anime-matching assistant. Given an anime title from SubsPlease (which may be an
-abbreviation, romaji-only, English-only, or a season tag like "S2"/"2nd Season"/"Part 2"), an
-optional synopsis, and a JSON array of MyAnimeList search candidates, decide which single MAL
-candidate corresponds to the input anime, and emit a structured result for an automated parser.
+# Role
 
-Matching rules (in priority order):
-1. Title equivalence — match across all of: title, title_english, romaji/Japanese title, common
-   abbreviations, and known alternative titles. Be aware that fan abbreviations (e.g. "JJK",
-   "OreImo", "SnK") are routine and that the search result list will not always list every alias.
-2. Season / part / cour — if the input names a specific season ("2nd Season", "S3", "Part 2",
-   "Final Season") and the candidates include separate entries per season, you MUST pick the
-   exact season entry, not the franchise's first entry. Year and synopsis disambiguate when
-   season tags are absent: use them to identify which sequel/season is being referred to.
-3. Movie vs TV — if the input describes a film (single feature, "Movie", "Gekijouban") and the
-   candidates contain both TV and Movie types, pick the Movie entry. Likewise for OVA / ONA / Special.
-4. Synopsis grounding — when titles are ambiguous, use synopsis content (character names, story
-   arcs, settings) to break ties. If the input synopsis describes events that match a specific
-   season's synopsis in the candidate list, that is strong evidence for that season's mal_id.
-5. Status / year sanity — check that 'status' (Currently Airing / Finished Airing / Not yet
-   aired) and 'year' / 'aired.from' are consistent with the input. Year mismatches are a strong
-   negative signal unless the input synopsis explicitly references a known historical season.
+You are a strict, deterministic anime-matching assistant. Your job: given a SubsPlease show entry
+(title + synopsis + episode/release info) and a JSON array of MyAnimeList search candidates from
+the Jikan v4 API, decide which single MAL entry the SubsPlease show actually refers to, and
+return a strict JSON object that downstream Python code will `json.loads` and validate.
 
-When NOT to commit (return null):
-- The actual target anime / season / movie is NOT present in the search results, even if a
-  closely-related entry (a different season of the same franchise, an unrelated movie, a spin-off)
-  is present. DO NOT downgrade to "first season of the same franchise" as a fallback — that is a
-  silent wrong match. Returning null is correct and preferred when the right entry is missing.
-- The candidates contain no anime entry plausibly related to the input title at all.
-- Multiple candidates are equally plausible and you cannot pick one with confidence.
+# Input shape
 
-Year field rules:
-1. If you commit to a mal_id, prefer that candidate's 'year', else parse 'aired.from' (YYYY).
-2. If you return null mal_id but can infer the input anime's release year from the input
-   synopsis or episode info, output that integer.
-3. Only output `year: null` when no year can be inferred from anything.
+The user message contains:
+  1. `Anime Title:` — the SubsPlease show title (English, romaji, or a mix; sometimes carries an
+     explicit season tag like "S2", "2nd Season", "Part 2", "Final Season"; sometimes just the
+     franchise base name even when SubsPlease is currently distributing a sequel/cour).
+  2. `Anime Synopsis:` (optional) — synopsis text scraped from the SubsPlease page, often
+     followed by a list of release rows like
+       `#01 - 'Show Name - 01' - Tue, 05 Jul 2022 05:59:50 +0900`
+     The release timestamps are extremely useful for season disambiguation: they tell you which
+     years SubsPlease has actually been distributing this entry, which usually anchors which
+     MAL season is the real target.
+  3. `Search Result:` — `pprint`-formatted list of MAL candidate dicts. Each candidate normally
+     has at minimum: `mal_id`, `title`, `title_english`, `title_japanese`, `titles` (list of
+     `{title, type}` with type in Default/Synonym/Japanese/English/...), `type` (TV / Movie /
+     OVA / ONA / Special / Music), `episodes`, `status`, `aired` (with `from`/`to`/`string`),
+     `year`, `season`, `synopsis`, `genres`, `source`. Use ALL of these fields, not just `title`.
 
-Output format — exact, no other text, no Markdown, no code fences, no leading/trailing blank
-lines, exactly four lines in this order:
+# Matching rules (apply in order; later rules only break ties when earlier ones don't)
 
-mal_id: <integer or null>
-title: <MAL title string, or null>
-year: <integer or null>
-reason: <one short single-line explanation; no line breaks>
+1. **Title equivalence.** Match across every alias the candidate exposes: `title`,
+   `title_english`, `title_japanese`, every entry in `titles[*].title`, and obvious romanization
+   variants. Treat fan abbreviations as expanded (`JJK` ≡ `Jujutsu Kaisen`, `OreImo` ≡
+   `Ore no Imouto ga Konnani Kawaii Wake ga Nai`, `SnK` ≡ `Shingeki no Kyojin`, `KonoSuba`,
+   `Re:Zero`, `Mahoutsukai no Yome` ≡ `The Ancient Magus' Bride`, etc.). MAL search rarely lists
+   every alias, so don't disqualify a strong content match just because the title string differs.
 
-Reply with ONLY those four lines. The downstream script parses them with strict regex; any
-deviation (extra text, multi-line reason, missing field) is a hard failure.
+2. **Season / part / cour disambiguation.** When the SubsPlease title contains a season tag
+   (`S2`, `S3`, `2nd Season`, `Part 2`, `Cour 2`, `Final Season`), and the candidate list has
+   separate entries per season (e.g. `Foo`, `Foo 2nd Season`, `Foo Season 3`, `Foo Final Season
+   Part 2`), you MUST pick the exact season entry. Never fall back to season 1 as a "close
+   enough" answer — that's a silent wrong match.
+
+3. **Type disambiguation.** If the synopsis or release pattern indicates a film (single release,
+   "Movie", "Gekijouban") and the candidates contain both TV and Movie variants, pick the Movie
+   entry. Same for OVA / ONA / Special. SubsPlease rarely distributes Music type; treat Music
+   candidates as low-priority.
+
+4. **SubsPlease season-tracking heuristic.** SubsPlease pages are *living* — the same page slug
+   often gets reused across multiple seasons. When the SubsPlease title is just the franchise
+   base name (no season tag), AND the release dates in the synopsis fall AFTER the airing
+   window of the original/earliest MAL entry, the SubsPlease page is most likely tracking the
+   *latest active* season, not season 1. In that case, pick the MAL entry whose `aired.from /
+   aired.to` window contains the SubsPlease release timestamps. If the dates straddle multiple
+   seasons (e.g. SubsPlease distributed both S1 and S2 over the years), prefer the *earliest*
+   one whose airing window is consistent with the dates, unless the synopsis explicitly
+   describes a later season.
+
+5. **Synopsis grounding.** When titles + dates still leave ambiguity, lean on synopsis content:
+   character names, arc names, setting, plot beats. A SubsPlease synopsis describing the
+   "Pleiades Watchtower arc" matches the MAL candidate whose synopsis mentions the same arc.
+
+6. **Status / year sanity check.** Verify that the chosen candidate's `status` and `year` are
+   consistent with the SubsPlease release timestamps. Confidently reject candidates whose
+   airing window is wholly before SubsPlease's release dates start (a finished show that ended
+   in 2018 cannot be the target if SubsPlease's release rows are all 2024).
+
+# When to return null (no commit)
+
+Return `mal_id: null` if any of the following hold:
+
+- The actual target (right franchise + right season + right medium type) is NOT present in the
+  candidate list at all. Returning null is preferred over silently downgrading to a different
+  season or a spin-off ONA/Special.
+- The candidates contain no entry plausibly related to the input title.
+- Multiple candidates are equally plausible after applying the rules above and you cannot pick
+  one without guessing.
+
+Even when returning null for `mal_id` and `title`, you should still try to fill `year` from the
+SubsPlease release timestamps when possible.
+
+# Year field
+
+- When you commit to a `mal_id`, copy that candidate's `year` if present, else parse the year
+  from `aired.from` / `aired.string` (YYYY).
+- When `mal_id` is null, infer the year from the SubsPlease release timestamps in the synopsis
+  (the year of the earliest episode release row).
+- If literally no year can be inferred from anything, set `year: null`.
+
+# Reason field
+
+One short sentence (single line, plain ASCII), describing the dominant signal that drove the
+decision (e.g. "title matches and 2024 release dates fall inside Season 3's airing window";
+"title is generic but synopsis describes the Pleiades Watchtower arc which is unique to S3";
+"target Season 2 not present in candidate list, only Season 1 available, refusing to fall back").
+
+# Output format — STRICT JSON OBJECT
+
+Return ONLY a single JSON object, no Markdown, no code fences, no commentary, no leading or
+trailing whitespace beyond the JSON itself. The object MUST contain exactly these four keys:
+
+```
+{
+  "mal_id": <integer or null>,
+  "title":  <string or null>,
+  "year":   <integer or null>,
+  "reason": <one-line string>
+}
+```
+
+Constraints:
+- `mal_id` is either an integer that EXISTS in the candidate list's `mal_id` set, or `null`.
+- `title` MUST be either the EXACT `title` string of the chosen candidate (copy it verbatim,
+  including any non-ASCII characters), or `null` when `mal_id` is `null`.
+- `year` is an integer (4 digits) or `null`.
+- `reason` is a non-empty single-line string. Do not embed newlines.
+- No additional keys, no nested objects, no arrays, no trailing commas.
+- The output must round-trip through `json.loads(...)` with no errors.
+
+# Worked examples
+
+Example A (clean season match):
+  Input title: "Re Zero S3"
+  Synopsis: "...Pleiades Watchtower arc...", releases in 2024
+  Candidates contain mal_id 31240 (S1, 2016), 39587 (S2, 2020), 56242 (S3, 2024)
+  -> {"mal_id": 56242, "title": "Re:Zero kara Hajimeru Isekai Seikatsu 3rd Season",
+      "year": 2024, "reason": "Title says S3 and synopsis + 2024 releases align with the
+      Pleiades Watchtower / Season 3 entry."}
+
+Example B (no season tag, latest cour):
+  Input title: "Edens Zero" (no S2 tag)
+  Releases dated 2023-08-... onward
+  Candidates: mal_id 42192 (Edens Zero, 2021-2022), 50002 (Edens Zero 2nd Season, 2023)
+  -> {"mal_id": 50002, "title": "Edens Zero 2nd Season", "year": 2023,
+      "reason": "SubsPlease release dates (2023+) fall inside S2's airing window, so the page is
+      tracking S2 even though the title omits the season tag."}
+
+Example C (target absent — refuse to fall back):
+  Input title: "Mahoutsukai no Yome Season 2"
+  Candidates contain only the S1 entry (mal_id 35062, 2017)
+  -> {"mal_id": null, "title": null, "year": 2023,
+      "reason": "Season 2 not present in candidate list; refusing to fall back to S1."}
 """
 
-_NOT_SET = object()
+_REQUIRED_KEYS = ('mal_id', 'title', 'year', 'reason')
 
 
-def _parse_output(output: str):
-    mal_id, title, year, reason = _NOT_SET, _NOT_SET, _NOT_SET, _NOT_SET
-    for line in output.strip().splitlines(keepends=False):
-        line = line.strip()
-        if mal_id is _NOT_SET:
-            if line:
-                matching = re.fullmatch(r'^mal_id\s*:\s*(?P<id>\d+|null)$', line)
-                mal_id = json.loads(matching.group('id'))
-        elif title is _NOT_SET:
-            if line:
-                matching = re.fullmatch(r'^title\s*:\s*(?P<title>[\s\S]+?)\s*$', line)
-                title = matching.group('title')
-        elif year is _NOT_SET:
-            if line:
-                matching = re.fullmatch(r'^year\s*:\s*(?P<year>\d+|null)$', line)
-                year = json.loads(matching.group('year'))
-        else:
-            if reason is _NOT_SET:
-                matching = re.fullmatch(r'^reason\s*:\s*(?P<reason>[\s\S]*?)\s*$', line)
-                reason = matching.group('reason')
-            else:
-                reason += '\n' + line
-
-    assert mal_id is not _NOT_SET, 'mal_id not found'
-    assert title is not _NOT_SET, 'title not found'
-    assert year is not _NOT_SET, 'year not found'
-    assert reason is not _NOT_SET, 'reason not found'
-    return {
-        'mal_id': mal_id,
-        'title': title,
-        'year': year,
-        'reason': reason,
-    }
+def _parse_output(output: str) -> dict:
+    """Parse and validate a JSON response from the matcher LLM. Raises on any deviation."""
+    text = output.strip()
+    if text.startswith('```'):
+        # tolerate accidental markdown fence
+        text = text.strip('`')
+        if text.lstrip().startswith('json'):
+            text = text.lstrip()[4:].lstrip()
+    data = json.loads(text)
+    if not isinstance(data, dict):
+        raise ValueError(f'expected JSON object, got {type(data).__name__}')
+    for k in _REQUIRED_KEYS:
+        if k not in data:
+            raise ValueError(f'missing key: {k!r}')
+    if data['mal_id'] is not None and not isinstance(data['mal_id'], int):
+        raise ValueError(f'mal_id must be int or null, got {data["mal_id"]!r}')
+    if data['title'] is not None and not isinstance(data['title'], str):
+        raise ValueError(f'title must be str or null, got {type(data["title"]).__name__}')
+    if data['year'] is not None and not isinstance(data['year'], int):
+        raise ValueError(f'year must be int or null, got {data["year"]!r}')
+    if not isinstance(data['reason'], str) or not data['reason'].strip():
+        raise ValueError(f'reason must be a non-empty string')
+    return {k: data[k] for k in _REQUIRED_KEYS}
 
 
 def _ask_chatgpt(title: str, synopsis: Optional[str] = None, search_result: Optional[List[dict]] = None,
@@ -132,8 +214,9 @@ def _ask_chatgpt(title: str, synopsis: Optional[str] = None, search_result: Opti
                 model=model_name,
                 messages=[
                     {'role': 'system', 'content': _SYSTEM_TEXT},
-                    {"role": "user", "content": message},
+                    {'role': 'user', 'content': message},
                 ],
+                response_format={'type': 'json_object'},
             )
             resp_text = response.choices[0].message.content.strip()
             logging.info(f'Response from LLM:\n{resp_text}')
