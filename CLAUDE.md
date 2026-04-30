@@ -40,23 +40,16 @@ This rule applies to commit messages and PR bodies as well — sanitize any past
 
 ## Commit Identity Policy
 
-Every commit created for this repository must use the git identity:
-
-```bash
-git config user.name "narugo1992"
-git config user.email "narugo1992@deepghs.org"
-```
-
-Verify the active identity before creating a commit:
+Use whatever git identity is already configured for this repository. Before committing, read it:
 
 ```bash
 git config user.name
 git config user.email
 ```
 
-If the local identity differs, override it for the commit (per-repo `git config`, not global) before committing. Do not create commits under any other name or email.
+Do **not** edit `git config` to change identity, do **not** override the author on a per-commit basis (`--author=...`), and do **not** invent a name or email — just commit as the identity the user has already set up locally. If `user.name` or `user.email` is unset, stop and ask the user to configure them rather than guessing.
 
-Commit message format — first line must be `dev(<author>): <summary>` in English, e.g. `dev(narugo): add subsplease retry guard`. For multi-line messages:
+Commit message format — first line must be `dev(<author>): <summary>` in English, where `<author>` is a short handle derived from the configured `user.name` (e.g. for `user.name = alice`, use `dev(alice): add subsplease retry guard`). For multi-line messages:
 
 - one blank line after the summary
 - one concise paragraph on intent or user-visible outcome
@@ -86,7 +79,7 @@ Before running ANY `gh` command (creating PRs/issues, commenting, merging, relea
 
 Do **NOT** use `gh auth switch` to change accounts before running `gh` commands. `gh auth switch` mutates global state in `~/.config/gh/hosts.yml` (the "active account" pointer); when multiple processes/agents run concurrently on this machine, one process's switch silently changes the active account under another process's feet, causing PRs/comments to be created under the wrong identity. Always use the per-process `GH_TOKEN=$(gh auth token --user ...)` pattern instead — it scopes the account choice to one command and cannot race with other processes.
 
-Rationale: this machine routinely runs concurrent agents/automation across multiple `deepghs`/personal identities. Running `gh` under the wrong account creates PRs/comments attributed to the wrong person and is hard to undo.
+Rationale: developer machines routinely run concurrent agents/automation across several GitHub identities. Running `gh` under the wrong account creates PRs/comments attributed to the wrong person and is hard to undo.
 
 ---
 
