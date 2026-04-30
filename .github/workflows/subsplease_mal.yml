@@ -67,6 +67,7 @@ jobs:
         env:
           CI: 'true'
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_ENDPOINT: ${{ secrets.HF_ENDPOINT }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_SITE: ${{ secrets.LLM_SITE }}
         shell: bash
