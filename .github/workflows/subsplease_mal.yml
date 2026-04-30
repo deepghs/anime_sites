@@ -70,6 +70,7 @@ jobs:
           HF_ENDPOINT: ${{ secrets.HF_ENDPOINT }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_SITE: ${{ secrets.LLM_SITE }}
+          LLM_MODEL_NAME: ${{ secrets.LLM_MODEL_NAME }}
         shell: bash
         run: |
           python -m sites.subsplease.match

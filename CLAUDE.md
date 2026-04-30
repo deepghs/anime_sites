@@ -124,6 +124,7 @@ Set these via the workflow `env` block (backed by GitHub Actions secrets) or, lo
 - `HF_TOKEN` — HuggingFace API token, required for dataset uploads
 - `HF_ENDPOINT` — alternate HuggingFace hub base URL (consumed transparently by `huggingface_hub`); set this when the run should target a mirror/proxy hub instead of `https://huggingface.co`
 - `LLM_API_KEY`, `LLM_SITE` — credentials and base URL for the OpenAI-compatible LLM endpoint used by the matching code
+- `LLM_MODEL_NAME` — model identifier passed to the LLM endpoint (e.g. `openai/gpt-4o-mini`). When unset, `sites/{subsplease,fancaps}/llm.py` falls back to `openai/gpt-4o-mini`
 - `ERAI_RAW_COOKIE` — full `Cookie` header value for `erai-raws.info`; required by `sites.erairaws.info.get_session()` unless `no_login=True`
 - `PP_SITE` — optional HTTP/HTTPS proxy URL used as a proxy pool for outbound scraping
 
@@ -157,7 +158,7 @@ All scheduled syncing happens through GitHub Actions; the same Python entrypoint
 - **Runner:** `ubuntu-latest`, Python `3.8`.
 - **Setup:** `apt-get install tree cloc wget curl make zip git-lfs`, `pip install -r requirements.txt` plus `flake8 setuptools wheel twine`.
 - **Command:** `python -m sites.subsplease.match`.
-- **Secrets injected:** `HF_TOKEN`, `HF_ENDPOINT`, `LLM_API_KEY`, `LLM_SITE`, plus `CI=true`.
+- **Secrets injected:** `HF_TOKEN`, `HF_ENDPOINT`, `LLM_API_KEY`, `LLM_SITE`, `LLM_MODEL_NAME`, plus `CI=true`.
 - **Effect:** crawls subsplease.org's show index, matches each show against MyAnimeList via the LLM, and incrementally updates the configured HuggingFace dataset (currently `deepghs/subsplease_mal`, hard-coded in `sites/subsplease/match.py:__main__`).
 
 ### `date.yml` — Date Deploy

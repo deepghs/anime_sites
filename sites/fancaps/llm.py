@@ -1,5 +1,6 @@
 import io
 import json
+import os
 import re
 from collections import defaultdict
 from pprint import pprint, pformat
@@ -11,53 +12,53 @@ from hbutils.string import plural_word
 
 from ..utils import get_openai_client, get_items_from_myanimelist, get_requests_session
 
-_DEFAULT_MODEL = 'openai/gpt-4o'
+_DEFAULT_MODEL = os.environ.get('LLM_MODEL_NAME') or 'openai/gpt-4o-mini'
 
 _SYSTEM_TEXT = """
-You are an effective assistant for matching anime information between fancaps.net and myanimelist websites. 
-I will provide an anime id/title (in English) from fancaps.net, along with the number of episodes included on 
-the fancaps website and some episode titles (representing only fancaps data, episodes may be missing; also, 
-some anime titles might have meaningless content like "episode 1/2/3"), and search results from myanimelist 
-website (in JSON format). You need to identify the most accurate match for the fancaps anime from the search results. 
-including its mal_id, title from mal and year.
+You are a strict anime-matching assistant. Given an anime title from fancaps.net (English-only,
+sometimes with placeholder episode titles like "episode 1/2/3"), the number of fancaps episodes,
+a sample of episode titles, and a JSON array of MyAnimeList search candidates, decide which single
+MAL candidate corresponds to the input anime, and emit a structured result for an automated parser.
 
-Please note the following:
-1. Prioritize matching based on the anime's name, translations, and alternative titles
-2. You can reference episode count information, but keep in mind that data on fancaps website may not be 
-   absolutely accurate, so this point cannot be definitive
-3. You can also check the synopsis (if provided), to check if the main content and summary of the anime provided 
-   are essentially consistent with those provided.
-3. If there are multiple potential matches, please provide only one most accurate match, such as a specific 
-   season within the same anime series
-4. There may be cases where no matching result can be found, in which case you should output "none" as the result, 
-   rather than forcing a match with an unrelated result
+Matching rules (in priority order):
+1. Title equivalence — match across all of: title, title_english, romaji/Japanese title, common
+   abbreviations, and known alternative titles. fancaps titles are usually in English; treat
+   English<->Japanese title pairs as equivalent.
+2. Season / part / cour — if the fancaps title names a specific season ("Season 2", "Part 2",
+   "Final Season", "Cour 2") and the candidates include separate entries per season, you MUST
+   pick the exact season entry, not the franchise's first entry.
+3. Movie vs TV — if fancaps describes a film (single feature) and the candidates contain both
+   TV and Movie types, pick the Movie entry. Likewise for OVA / ONA / Special.
+4. Episode count is a HINT, not a constraint — fancaps episode counts are frequently incomplete
+   or inaccurate, so use them only as weak corroborating evidence.
+5. Episode titles — if the sampled episode titles align with arcs/episode names of a specific
+   MAL candidate's season, that is strong evidence for that mal_id.
+6. Synopsis grounding (when present in candidates) — match story content, character names, arcs.
 
-For the year field:
-1. It should be an integer, mainly inferred from the anime information provided.
-2. If you can find this information in the matched search result, use the year from the search result.
-3. If no specific year is provided in the matched search result, try find it from the 'aired' item from the matched search result.
-   Use the 'aired.from' time as the result.
-4. If you cannot find this information in any parts of the search result, or no matching search result can be found,
-   Just use the information you inferred from the provided information of the anime episodes.
-   The year result should be the year which the first episode is released.
-5. If there is truly no information at all, return the "null". 
+When NOT to commit (return null):
+- The actual target anime / season / movie is NOT present in the search results, even if a
+  closely-related entry (a different season of the same franchise, an unrelated movie, a spin-off)
+  is present. DO NOT downgrade to "first season of the same franchise" as a fallback — that is a
+  silent wrong match. Returning null is correct and preferred when the right entry is missing.
+- The candidates contain no anime entry plausibly related to the input title at all.
+- Multiple candidates are equally plausible and you cannot pick one with confidence.
 
-When the best match is found, output in the following format:
+Year field rules:
+1. If you commit to a mal_id, prefer that candidate's 'year', else parse 'aired.from' (YYYY).
+2. If you return null mal_id but can infer the input anime's release year from episode info,
+   output that integer.
+3. Only output `year: null` when no year can be inferred from anything.
 
-mal_id: xxxxx (should be an integer)
-title: xxxxxxxxxx (should be a string)
-year: xxxx (should be an integer, mainly inferred from the anime information provided)
-reason: xxxxxx (The reason should be strictly on a single line, multiple lines for reasons are not allowed)
+Output format — exact, no other text, no Markdown, no code fences, no leading/trailing blank
+lines, exactly four lines in this order:
 
-When no search result is found, output in the following format:
+mal_id: <integer or null>
+title: <MAL title string, or null>
+year: <integer or null>
+reason: <one short single-line explanation; no line breaks>
 
-mal_id: null
-title: null
-year: xxxx/null (no matter match success or not, you should try your best to infer the year of this anime, unless truly impossible)
-reason: xxxxxxxxx
-
-DO NOT OUTPUT ANYTHING ELSE EXCEPT THESE, MAKE SURE THE OUTPUT CAN BE PROCESSED BY THE AUTOMATED SCRIPT.
-NO MATTER YOU FIND THE MATCH OR NOT, PLEASE DESCRIBE YOU REASONS AND WHY YOU GIVE THIS ANSWER. 
+Reply with ONLY those four lines. The downstream script parses them with strict regex; any
+deviation (extra text, multi-line reason, missing field) is a hard failure.
 """
 
 _NOT_SET = object()
